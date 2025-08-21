@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二维码解锁画廊</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 2.5rem;
+            font-weight: 300;
+            margin-bottom: 10px;
+        }
+
+        .stats {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 25px;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .media-item {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            position: relative;
+        }
+
+        .media-item:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+        }
+
+        .media-preview {
+            width: 100%;
+            height: 200px;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .media-preview img, .media-preview video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: filter 0.3s ease;
+        }
+
+        .locked .media-preview img, 
+        .locked .media-preview video {
+            filter: blur(20px) brightness(0.3);
+        }
+
+        .lock-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 3rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .locked .lock-overlay {
+            opacity: 1;
+        }
+
+        .media-info {
+            padding: 20px;
+        }
+
+        .media-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #2c3e50;
+        }
+
+        .media-description {
+            color: #7f8c8d;
+            font-size: 0.95rem;
+            margin-bottom: 15px;
+            line-height: 1.4;
+        }
+
+        .media-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #ecf0f1;
+            color: #2c3e50;
+        }
+
+        .btn-secondary:hover {
+            background: #d5dbdb;
+        }
+
+        .unlock-status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .status-locked {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .status-unlocked {
+            background: #27ae60;
+            color: white;
+        }
+
+        /* 详情页模态框样式 */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: modalSlideIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .modal-header {
+            padding: 30px 30px 20px;
+            border-bottom: 1px solid #ecf0f1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 2rem;
+            color: #2c3e50;
+            font-weight: 300;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 2rem;
+            cursor: pointer;
+            color: #95a5a6;
+            padding: 5px;
+            line-height: 1;
+        }
+
+        .close-btn:hover {
+            color: #2c3e50;
+        }
+
+        .modal-body {
+            padding: 30px;
+            text-align: center;
+        }
+
+        .detail-media {
+            width: 100%;
+            max-width: 600px;
+            height: 400px;
+            object-fit: cover;
+            border-radius: 15px;
+            margin-bottom: 25px;
+        }
+
+        .qr-container {
+            margin: 25px 0;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 15px;
+        }
+
+        .qr-code {
+            display: inline-block;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .qr-instructions {
+            margin-top: 15px;
+            color: #7f8c8d;
+            font-size: 0.95rem;
+        }
+
+        .unlock-section {
+            margin-top: 30px;
+            padding: 25px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border-radius: 15px;
+            color: white;
+        }
+
+        .unlock-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 15px;
+        }
+
+        .unlock-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .unlock-message {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(39, 174, 96, 0.9);
+            border-radius: 10px;
+            display: none;
+        }
+
+        .media-type-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .gallery {
+                grid-template-columns: 1fr;
+                padding: 15px;
+            }
+            
+            .modal-content {
+                margin: 20px;
+                max-width: calc(100vw - 40px);
+            }
+            
+            .modal-body {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎨 智能画廊</h1>
+        <div class="stats">
+            <span id="unlocked-count">0</span> / <span id="total-count">6</span> 已解锁
+        </div>
+    </div>
+
+    <div class="gallery" id="gallery">
+        <!-- 画廊内容将通过 JavaScript 动态生成 -->
+    </div>
+
+    <!-- 详情页模态框 -->
+    <div class="modal" id="detailModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalTitle">详情页</h2>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- 详情内容将动态填充 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 模拟媒体数据
+        const mediaData = [
+            {
+                id: 1,
+                title: "夜空中的星辰",
+                description: "璀璨星空下的宁静夜晚，记录着宇宙的神秘与美丽",
+                type: "image",
+                src: "https://images.unsplash.com/photo-1446776877081-d282a0f896e2?w=400",
+                unlocked: false
+            },
+            {
+                id: 2,
+                title: "海浪音乐会",
+                description: "海浪拍击礁石的自然音乐，带来内心的平静与力量",
+                type: "video",
+                src: "https://sample-videos.com/zip/10/mp4/360p/SampleVideo_360x240_1mb.mp4",
+                unlocked: false
+            },
+            {
+                id: 3,
+                title: "山巅日出",
+                description: "第一缕阳光穿破云层，照亮整个山脉的壮丽景象",
+                type: "image",
+                src: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400",
+                unlocked: false
+            },
+            {
+                id: 4,
+                title: "森林漫步",
+                description: "阳光透过树叶洒下的光影，创造出梦幻般的森林小径",
+                type: "video",
+                src: "https://sample-videos.com/zip/10/mp4/360p/SampleVideo_360x240_1mb.mp4",
+                unlocked: true
+            },
+            {
+                id: 5,
+                title: "城市夜景",
+                description: "霓虹灯下的都市夜晚，现代文明的光影交响曲",
+                type: "image",
+                src: "https://images.unsplash.com/photo-1514565131-fce0801e5785?w=400",
+                unlocked: false
+            },
+            {
+                id: 6,
+                title: "雨滴协奏曲",
+                description: "雨滴敲击窗台的自然旋律，洗涤心灵的纯净之声",
+                type: "video",
+                src: "https://sample-videos.com/zip/10/mp4/360p/SampleVideo_360x240_1mb.mp4",
+                unlocked: false
+            }
+        ];
+
+        // 存储解锁状态的对象
+        let unlockStatus = {};
+
+        // 监听解锁消息的函数
+        function listenForUnlock() {
+            window.addEventListener('message', function(event) {
+                if (event.data && event.data.type === 'UNLOCK_ITEM') {
+                    const itemId = event.data.itemId;
+                    unlockItem(itemId);
+                }
+            });
+        }
+
+        // 解锁项目的函数
+        function unlockItem(itemId) {
+            const item = mediaData.find(m => m.id === itemId);
+            if (item) {
+                item.unlocked = true;
+                unlockStatus[itemId] = true;
+                
+                // 保存到本地存储
+                try {
+                    const savedStatus = JSON.parse(localStorage.getItem('unlockStatus') || '{}');
+                    savedStatus[itemId] = true;
+                    localStorage.setItem('unlockStatus', JSON.stringify(savedStatus));
+                } catch(e) {
+                    // 如果localStorage不可用，使用内存存储
+                    unlockStatus[itemId] = true;
+                }
+                
+                renderGallery();
+                
+                // 显示解锁消息
+                const unlockMessage = document.querySelector('.unlock-message');
+                if (unlockMessage) {
+                    unlockMessage.style.display = 'block';
+                    unlockMessage.innerHTML = `🎉 "${item.title}" 已成功解锁！`;
+                    
+                    setTimeout(() => {
+                        unlockMessage.style.display = 'none';
+                    }, 3000);
+                }
+            }
+        }
+
+        // 渲染画廊
+        function renderGallery() {
+            const gallery = document.getElementById('gallery');
+            const unlockedCount = mediaData.filter(item => item.unlocked).length;
+            
+            document.getElementById('unlocked-count').textContent = unlockedCount;
+            document.getElementById('total-count').textContent = mediaData.length;
+            
+            gallery.innerHTML = mediaData.map(item => `
+                <div class="media-item ${item.unlocked ? '' : 'locked'}">
+                    <div class="media-preview">
+                        ${item.type === 'image' 
+                            ? `<img src="${item.src}" alt="${item.title}">`
+                            : `<video src="${item.src}" muted></video>`
+                        }
+                        <div class="media-type-badge">${item.type === 'image' ? '📷' : '🎥'}</div>
+                        <div class="lock-overlay">🔒</div>
+                    </div>
+                    <div class="media-info">
+                        <div class="unlock-status ${item.unlocked ? 'status-unlocked' : 'status-locked'}">
+                            ${item.unlocked ? '✓ 已解锁' : '🔒 已锁定'}
+                        </div>
+                        <h3 class="media-title">${item.title}</h3>
+                        <p class="media-description">${item.description}</p>
+                        <div class="media-actions">
+                            <button class="btn btn-primary" onclick="showDetail(${item.id})">
+                                查看详情
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 显示详情页
+        function showDetail(itemId) {
+            const item = mediaData.find(m => m.id === itemId);
+            if (!item) return;
+
+            const modal = document.getElementById('detailModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalBody = document.getElementById('modalBody');
+
+            modalTitle.textContent = item.title;
+            
+            // 生成详情页URL（用于二维码）
+            const detailUrl = `${window.location.origin}${window.location.pathname}?detail=${itemId}`;
+            
+            modalBody.innerHTML = `
+                <div class="detail-content">
+                    ${item.type === 'image' 
+                        ? `<img src="${item.src}" alt="${item.title}" class="detail-media">`
+                        : `<video src="${item.src}" class="detail-media" controls></video>`
+                    }
+                    
+                    <p style="font-size: 1.2rem; color: #7f8c8d; margin: 20px 0;">${item.description}</p>
+                    
+                    <div class="qr-container">
+                        <h3 style="margin-bottom: 15px; color: #2c3e50;">扫码查看详情</h3>
+                        <div class="qr-code" id="qr-${itemId}"></div>
+                        <p class="qr-instructions">使用手机扫描二维码访问详情页面</p>
+                    </div>
+                    
+                    <div class="unlock-section">
+                        <h3>🔓 解锁内容</h3>
+                        <p>点击下方按钮解锁此内容，解锁后将在主页面显示完整内容</p>
+                        <button class="unlock-btn" onclick="handleUnlock(${itemId})" 
+                                ${item.unlocked ? 'disabled' : ''}>
+                            ${item.unlocked ? '✓ 已解锁' : '🔓 立即解锁'}
+                        </button>
+                        <div class="unlock-message" id="unlock-msg-${itemId}"></div>
+                    </div>
+                </div>
+            `;
+
+            modal.classList.add('active');
+
+            // 生成二维码
+            setTimeout(() => {
+                const qrElement = document.getElementById(`qr-${itemId}`);
+                if (qrElement) {
+                    qrElement.innerHTML = ''; // 清除之前的二维码
+                    new QRCode(qrElement, {
+                        text: detailUrl,
+                        width: 150,
+                        height: 150,
+                        colorDark: "#2c3e50",
+                        colorLight: "#ffffff"
+                    });
+                }
+            }, 100);
+        }
+
+        // 处理解锁
+        function handleUnlock(itemId) {
+            unlockItem(itemId);
+            
+            // 更新解锁按钮状态
+            const unlockBtn = document.querySelector('.unlock-section .unlock-btn');
+            if (unlockBtn) {
+                unlockBtn.disabled = true;
+                unlockBtn.textContent = '✓ 已解锁';
+            }
+
+            // 通知父窗口（如果在iframe中）
+            try {
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'UNLOCK_ITEM',
+                        itemId: itemId
+                    }, '*');
+                }
+            } catch(e) {
+                // 忽略跨域错误
+            }
+        }
+
+        // 关闭模态框
+        function closeModal() {
+            document.getElementById('detailModal').classList.remove('active');
+        }
+
+        // 点击模态框外部关闭
+        document.getElementById('detailModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        // 检查URL参数以处理二维码访问
+        function checkUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const detailId = urlParams.get('detail');
+            
+            if (detailId) {
+                const itemId = parseInt(detailId);
+                showDetail(itemId);
+            }
+        }
+
+        // 初始化
+        function init() {
+            // 从本地存储加载解锁状态
+            try {
+                const savedStatus = JSON.parse(localStorage.getItem('unlockStatus') || '{}');
+                mediaData.forEach(item => {
+                    if (savedStatus[item.id]) {
+                        item.unlocked = true;
+                    }
+                });
+            } catch(e) {
+                // localStorage不可用时使用默认状态
+            }
+            
+            renderGallery();
+            listenForUnlock();
+            checkUrlParams();
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
