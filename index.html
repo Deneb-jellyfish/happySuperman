@@ -348,6 +348,16 @@
     </div>
 
     <script>
+        // 全局解锁状态 - 一旦解锁永久有效
+        const globalUnlockStatus = {
+            1: false,  // 夜空中的星辰
+            2: false,  // 海浪音乐会
+            3: false,  // 山巅日出
+            4: true,   // 森林漫步 - 默认解锁
+            5: false,  // 城市夜景
+            6: false   // 雨滴协奏曲
+        };
+
         // 模拟媒体数据
         const mediaData = [
             {
@@ -356,7 +366,7 @@
                 description: "璀璨星空下的宁静夜晚，记录着宇宙的神秘与美丽。这是一幅摄于高原的星空摄影作品，展现了银河系的壮丽景象。",
                 type: "image",
                 src: "https://images.unsplash.com/photo-1446776877081-d282a0f896e2?w=600",
-                unlocked: false
+                get unlocked() { return globalUnlockStatus[this.id]; }
             },
             {
                 id: 2,
@@ -364,7 +374,7 @@
                 description: "海浪拍击礁石的自然音乐，带来内心的平静与力量。录制于太平洋海岸，捕捉了大自然最原始的声音。",
                 type: "video",
                 src: "https://sample-videos.com/zip/10/mp4/360p/SampleVideo_360x240_1mb.mp4",
-                unlocked: false
+                get unlocked() { return globalUnlockStatus[this.id]; }
             },
             {
                 id: 3,
@@ -372,7 +382,7 @@
                 description: "第一缕阳光穿破云层，照亮整个山脉的壮丽景象。这是在海拔4000米的雪山上等待了整夜才拍摄到的珍贵瞬间。",
                 type: "image",
                 src: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600",
-                unlocked: false
+                get unlocked() { return globalUnlockStatus[this.id]; }
             },
             {
                 id: 4,
@@ -380,7 +390,7 @@
                 description: "阳光透过树叶洒下的光影，创造出梦幻般的森林小径。拍摄于北欧的原始森林，展现了大自然的神秘魅力。",
                 type: "video",
                 src: "https://sample-videos.com/zip/10/mp4/360p/SampleVideo_360x240_1mb.mp4",
-                unlocked: true
+                get unlocked() { return globalUnlockStatus[this.id]; }
             },
             {
                 id: 5,
@@ -388,7 +398,7 @@
                 description: "霓虹灯下的都市夜晚，现代文明的光影交响曲。从摩天大楼顶部俯瞰的都市夜景，展现了现代城市的繁华与美丽。",
                 type: "image",
                 src: "https://images.unsplash.com/photo-1514565131-fce0801e5785?w=600",
-                unlocked: false
+                get unlocked() { return globalUnlockStatus[this.id]; }
             },
             {
                 id: 6,
@@ -396,22 +406,15 @@
                 description: "雨滴敲击窗台的自然旋律，洗涤心灵的纯净之声。录制于一个宁静的雨夜，捕捉了雨水与自然的和谐共鸣。",
                 type: "video",
                 src: "https://sample-videos.com/zip/10/mp4/360p/SampleVideo_360x240_1mb.mp4",
-                unlocked: false
+                get unlocked() { return globalUnlockStatus[this.id]; }
             }
         ];
 
-        // 存储解锁状态
-        let unlockStatus = {};
-
-        // 解锁项目的函数
+        // 解锁项目的函数 - 全局永久解锁
         function unlockItem(itemId) {
-            const item = mediaData.find(m => m.id === itemId);
-            if (item && !item.unlocked) {
-                item.unlocked = true;
-                unlockStatus[itemId] = true;
-                
-                // 保存到内存（因为localStorage不可用）
-                saveUnlockStatus();
+            if (!globalUnlockStatus[itemId]) {
+                // 设置全局解锁状态
+                globalUnlockStatus[itemId] = true;
                 
                 // 如果在主页面，更新显示
                 if (document.getElementById('mainPage').style.display !== 'none') {
@@ -421,8 +424,9 @@
                 // 显示解锁成功消息
                 const unlockMessage = document.getElementById('unlockMessage');
                 if (unlockMessage) {
+                    const item = mediaData.find(m => m.id === itemId);
                     unlockMessage.style.display = 'block';
-                    unlockMessage.innerHTML = `🎉 "${item.title}" 已成功解锁！返回主页面查看完整内容。`;
+                    unlockMessage.innerHTML = `🎉 "${item.title}" 已成功解锁！现在所有访问者都可以看到完整内容。`;
                     
                     // 更新解锁按钮
                     const unlockBtn = document.getElementById('unlockBtn');
@@ -435,18 +439,6 @@
                 return true;
             }
             return false;
-        }
-
-        // 保存解锁状态（使用内存存储）
-        function saveUnlockStatus() {
-            // 由于不能使用localStorage，这里只是一个占位函数
-            // 在实际应用中可以发送到服务器保存
-        }
-
-        // 加载解锁状态
-        function loadUnlockStatus() {
-            // 由于不能使用localStorage，这里只是一个占位函数
-            // 在实际应用中可以从服务器加载
         }
 
         // 渲染画廊
@@ -493,6 +485,8 @@
                     const qrElement = document.getElementById(`qr-${item.id}`);
                     if (qrElement) {
                         const detailUrl = `${window.location.origin}${window.location.pathname}?item=${item.id}`;
+                        
+                        qrElement.innerHTML = ''; // 清空之前的二维码
                         new QRCode(qrElement, {
                             text: detailUrl,
                             width: 120,
@@ -576,8 +570,6 @@
 
         // 初始化
         function init() {
-            loadUnlockStatus();
-            
             // 检查是否是通过二维码访问的详情页
             if (!checkUrlParams()) {
                 // 如果不是，显示主页面
